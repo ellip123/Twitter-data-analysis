@@ -1,0 +1,175 @@
+---
+title: "The Twitter Package Explained"
+author: "Xiangyu Liu"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+##Search tweets about four movies 
+```{r}
+library(rtweet)
+
+NY <- search_tweets(
+  '"Gangs of New York"', n = 250000, retryonratelimit = TRUE,since='2017-12-01', until='2017-12-11')
+
+Seattle <- search_tweets(
+  '"Sleepless in Seattle"', n = 500000, retryonratelimit = TRUE,since='2017-12-01', until='2017-12-11'
+)
+
+LA <- search_tweets(
+  '"L.A. Confidential"', n = 250000, retryonratelimit = TRUE,since='2017-12-01', until='2017-12-11'
+)
+
+LasVegas <- search_tweets(
+  '"Fear and Loathing in Las Vegas"', n = 250000, retryonratelimit = TRUE,since='2017-12-01', until='2017-12-11'
+)
+
+
+```
+##Data Cleaning
+```{r}
+library(dplyr)
+library(ggplot2)
+names(NY)
+##comine 4 datasets
+NY["movie"] <- "Gangs of New York"
+LA["movie"] <- "L.A. Confidential"
+Seattle["movie"] <- "Sleepless in Seattle"
+LasVegas["movie"] <- "Fear and Loathing in Las Vegas"
+rawdata <- rbind(NY,LA,Seattle,LasVegas)
+
+##select columns and filter columns
+
+movies <- rawdata[, c("movie","user_id","text","source","favorite_count","retweet_count","lang","country","country_code","geo_coords","coords_coords","bbox_coords","created_at")] %>% filter(lang =='en') %>% filter(!is.na(text)) %>% as.data.frame()
+
+```
+##Data Visulization
+```{r}
+## Show the realtionship between favourite count and retweet count for each movie
+movies_by_name <- movies%>% group_by(movie)%>%filter(favorite_count !=0 & retweet_count !=0 &retweet_count<50)%>%arrange(favorite_count)
+
+library(ggplot2)
+
+ggplot(movies_by_name,aes(favorite_count,retweet_count,group = movie, colour = movie)) + geom_point()+geom_smooth(method = "loess")
+
+##show 5 most popular tweet sources for each movie(use functions here)
+popular_sources<- function(movie_name="Gangs of New York"){
+   movies_by_source <- subset(movies,movie == movie_name)%>%
+     group_by(source)%>%
+     summarise(favorite_count=sum(favorite_count))%>%
+     arrange(desc(favorite_count))%>% 
+     head(5)%>%as.data.frame()
+  movies_by_source$movie <- movie_name 
+  return(movies_by_source)
+}
+
+
+
+popular_sources()
+popular_sources(movie_name="Sleepless in Seattle")
+popular_sources(movie_name="L.A. Confidential")  
+popular_sources("Fear and Loathing in Las Vegas")
+
+## plot time series of tweets about'Gangs of New York'
+ts_plot(NY, "3 hours") +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(plot.title = ggplot2::element_text(face = "bold")) +
+  ggplot2::labs(
+    x = NULL, y = NULL,
+    title = "Frequency of Twitter about 'Gangs of New York' statuses from past 10 days",
+    subtitle = "Twitter status (tweet) counts aggregated using three-hour intervals",
+    caption = "\nSource: Data collected from Twitter's REST API via rtweet"
+  )
+```
+
+##Graphical Visualizations
+```{r}
+## create lat/lng variables using all available tweet and profile geo-location data
+rt <- lat_lng(movies)
+
+## plot state boundaries
+par(mar = c(0, 0, 0, 0))
+maps::map("state", lwd = .25)
+
+## plot lat and lng points onto state map
+with(rt, points(lng, lat, pch = 20, cex = .75, col = rgb(0, .3, .7, .75)))
+
+```
+##Get Timelines
+```{r}
+## Get the most recent 3,200 tweets from cnn, BBCWorld, and foxnews
+cities <- get_timelines(c("nytimes", "seattletimes ","CityOfLasVegas","latimes"), n = 3200)
+
+## plot the frequency of tweets for each user since 2017-12-01
+cities %>%
+  dplyr::filter(created_at > "2017-12-01") %>%
+  dplyr::group_by(screen_name) %>%
+  ts_plot("days", trim = 1L) +
+  ggplot2::geom_point() +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    legend.title = ggplot2::element_blank(),
+    legend.position = "bottom",
+    plot.title = ggplot2::element_text(face = "bold")) +
+  ggplot2::labs(
+    x = NULL, y = NULL,
+    title = "Frequency of Twitter statuses posted by news organization",
+    subtitle = "Twitter status (tweet) counts aggregated by day from October/November 2017",
+    caption = "\nSource: Data collected from Twitter's REST API via rtweet"
+  )
+```
+
+##Text Cleaning 
+```{r}
+
+library(tm)
+# build a corpus, and specify the source to be character vectors 
+myCorpus <- Corpus(VectorSource(movies$text))
+# convert to lower case
+myCorpus <- tm_map(myCorpus, content_transformer(tolower))
+# remove URLs
+removeURL <- function(x) gsub("http[^[:space:]]*", "", x)
+myCorpus <- tm_map(myCorpus, content_transformer(removeURL))
+# remove anything other than English letters or space 
+removeNumPunct <- function(x) gsub("[^[:alpha:][:space:]]*", "", x) 
+myCorpus <- tm_map(myCorpus, content_transformer(removeNumPunct)) 
+# remove stopwords
+myStopwords <- c(setdiff(stopwords('english'), c("r", "big")),
+                     "use", "see", "used", "via", "amp")
+myCorpus <- tm_map(myCorpus, removeWords, myStopwords)
+# remove extra whitespace
+myCorpus <- tm_map(myCorpus, stripWhitespace)
+myCorpusCopy <- myCorpus
+tdm<- TermDocumentMatrix(myCorpus,
+                            control = list(wordLengths = c(1, Inf)))
+tdm
+
+```
+##Frequent Words
+```{r}
+freq.terms <- findFreqTerms(tdm, lowfreq = 20)
+freq.terms
+term.freq <- rowSums(as.matrix(tdm))
+term.freq <- subset(term.freq, term.freq >= 20)
+df <- data.frame(term = names(term.freq), freq = term.freq)%>%head(15)
+library(ggplot2)
+ggplot(df, aes(x=term, y=freq)) + geom_bar(stat="identity") +
+  xlab("Terms") + ylab("Count") + coord_flip() +
+  theme(axis.text=element_text(size=7))
+
+m <- as.matrix(tdm)
+m <- m %>%head(400)
+# calculate the frequency of words and sort it by frequency w
+word.freq <- sort(rowSums(m), decreasing = T)
+
+```
+##Wordcloud
+```{r}
+library(wordcloud)
+wordcloud(words = names(word.freq), freq = word.freq, min.freq = 3,random.order = F)
+```
+
+

@@ -1,0 +1,25 @@
+---
+output: github_document
+---
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-"
+)
+```
+# twitter
+
+The goal of twitter is to search tweets about four movies, do the data cleaning and visualization, do the graphical visualizations and compare the popularity of different movies in different cities, get the timelines for each user, get the most frequent words for each movie and finally make a word cloud.
+
+## Example
+
+This is a basic example which shows you how to get the most 5 popular tweet sources of a movie:
+
+```{r example}
+## basic example code
+popular_sources("Sleepless in Seattle")
+popular_sources("Gangs of New York")
+```

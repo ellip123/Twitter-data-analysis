@@ -1,0 +1,21 @@
+Package: twitter
+Type: Package
+Title: Data analysis on tweets about 4 movies
+Version: 0.1.0
+Authors@R: person("Xiangyu", "Liu", email = "xl2703@columbia.edu",
+      role = c("aut", "cre"))
+Description: Allows one to choose to compare tweets related to differnent topics.
+Encoding: UTF-8
+LazyData: true
+License: MIT
+Imports: 
+    rtweet,
+    dplyr,
+    ggplot2,
+    tm,
+    wordcloud
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+RoxygenNote: 6.0.1.9000
